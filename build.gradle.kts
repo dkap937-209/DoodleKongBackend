@@ -2,6 +2,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktor)
+    kotlin("plugin.serialization") version "1.9.0"
 }
 
 group = "com.dkdev45"
@@ -31,4 +32,5 @@ dependencies {
     implementation("com.google.code.gson:gson:2.8.9")
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 }
