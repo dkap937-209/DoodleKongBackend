@@ -4,6 +4,7 @@ import com.dkdev45.data.Room
 import com.dkdev45.server
 import data.models.BasicApiResponse
 import data.models.CreateRoomRequest
+import data.models.RoomResponse
 import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -50,6 +51,31 @@ fun Route.createRoomRoute() {
                 HttpStatusCode.OK,
                 BasicApiResponse(true)
             )
+        }
+    }
+}
+
+fun Route.getRoomsRoute() {
+    route("/api/getRooms") {
+        get {
+            val searchQuery = call.parameters["searchQuery"]
+            if(searchQuery == null) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            val roomsResult = server.rooms.filterKeys {
+                it.contains(searchQuery, ignoreCase = true)
+            }
+            val roomResponses = roomsResult.values.map {
+                RoomResponse(
+                    name = it.name,
+                    maxPlayers = it.maxPlayers,
+                    playerCount = it.players.size
+                )
+            }.sortedBy { it.name }
+
+            call.respond(HttpStatusCode.OK, roomResponses)
         }
     }
 }
