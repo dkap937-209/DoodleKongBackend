@@ -1,6 +1,7 @@
 package com.dkdev45
 
 import DrawingServer
+import com.google.gson.Gson
 import io.ktor.server.application.*
 
 fun main(args: Array<String>) {
@@ -8,6 +9,7 @@ fun main(args: Array<String>) {
 }
 
 val server = DrawingServer()
+val gson = Gson()
 
 fun Application.module() {
     configureSession()
