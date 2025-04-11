@@ -24,4 +24,10 @@ class Room(
             }
         }
     }
+
+    fun containsPlayer(username: String): Boolean {
+        return players.find {
+            it.username == username
+        } != null
+    }
 }
