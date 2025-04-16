@@ -47,8 +47,8 @@ class Room(
         }
     }
 
-    suspend fun broadcastToAllException(message: String, clientId: String) {
-        players.forEach {player ->
+    suspend fun broadcastToAllExcept(message: String, clientId: String) {
+        players.forEach { player ->
             if(player.clientId != clientId && player.socket.isActive) {
                 player.socket.send(Frame.Text(message))
             }
