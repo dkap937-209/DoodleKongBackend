@@ -1,26 +1,47 @@
 package routes
 
+import com.dkdev45.data.Player
 import com.dkdev45.data.Room
 import com.dkdev45.gson
 import com.dkdev45.server
 import com.dkdev45.session.DrawingSession
 import com.google.gson.JsonParser
-import data.models.BaseModel
-import data.models.ChatMessage
-import data.models.DrawData
+import data.models.*
 import io.ktor.server.routing.*
 import io.ktor.server.sessions.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.consumeEach
+import util.Constants.TYPE_ANNOUNCEMENT
 import util.Constants.TYPE_CHAT_MESSAGE
 import util.Constants.TYPE_DRAW_DATA
+import util.Constants.TYPE_JOIN_ROOM_HANDSHAKE
 
 
 fun Route.gameWebSocketRoute() {
     route("/ws/draw") {
         standardWebSocket { socket, clientId, message, payload ->
             when(payload) {
+                is JoinRoomHandshake -> {
+                    val room = server.rooms[payload.roomName]
+                    if(room == null) {
+                        val gameError = GameError(
+                            GameError.ERROR_ROOM_NOT_FOUND
+                        )
+                        socket.send(Frame.Text(gson.toJson(gameError)))
+                        return@standardWebSocket
+                    }
+
+                    val player = Player(
+                        payload.username,
+                        socket,
+                        payload.clientId
+                    )
+                    server.playerJoined(player)
+                    if(!room.containsPlayer(player.username)) {
+                        room.addPlayer(player.clientId, player.username, socket)
+                    }
+                }
                 is DrawData -> {
                     val room = server.rooms[payload.roomName] ?: return@standardWebSocket
                     if(room.phase == Room.Phase.GAME_RUNNING) {
@@ -57,6 +78,8 @@ fun Route.standardWebSocket(
                     val type = when(jsonObject.get("type").asString) {
                         TYPE_CHAT_MESSAGE -> ChatMessage::class.java
                         TYPE_DRAW_DATA -> DrawData::class.java
+                        TYPE_ANNOUNCEMENT -> Announcement::class.java
+                        TYPE_JOIN_ROOM_HANDSHAKE -> JoinRoomHandshake::class.java
                         else -> BaseModel::class.java
                     }
                     val payload = gson.fromJson(message, type)
