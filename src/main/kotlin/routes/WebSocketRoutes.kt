@@ -16,6 +16,7 @@ import util.Constants.TYPE_ANNOUNCEMENT
 import util.Constants.TYPE_CHAT_MESSAGE
 import util.Constants.TYPE_DRAW_DATA
 import util.Constants.TYPE_JOIN_ROOM_HANDSHAKE
+import util.Constants.TYPE_PHASE_CHANGE
 
 
 fun Route.gameWebSocketRoute() {
@@ -80,6 +81,7 @@ fun Route.standardWebSocket(
                         TYPE_DRAW_DATA -> DrawData::class.java
                         TYPE_ANNOUNCEMENT -> Announcement::class.java
                         TYPE_JOIN_ROOM_HANDSHAKE -> JoinRoomHandshake::class.java
+                        TYPE_PHASE_CHANGE -> PhaseChange::class.java
                         else -> BaseModel::class.java
                     }
                     val payload = gson.fromJson(message, type)
