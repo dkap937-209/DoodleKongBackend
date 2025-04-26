@@ -1,13 +1,11 @@
 package com.dkdev45.data
 
 import com.dkdev45.gson
-import data.models.Announcement
-import data.models.ChosenWord
-import data.models.GameState
-import data.models.PhaseChange
+import data.models.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.internal.synchronized
+import util.getRandomWords
 import util.transformToUnderscores
 import util.words
 
@@ -22,6 +20,7 @@ class Room(
     private var winningPlayers = listOf<String>()
     private var word: String? = null
     private var curWords: List<String>? = null
+    private var drawingPlayerIndex = 0
 
     private var phaseChangeListener:((Phase)-> Unit)? = null
     @OptIn(InternalCoroutinesApi::class)
@@ -158,8 +157,14 @@ class Room(
     }
 
     private fun newRound(){
+        curWords = getRandomWords(3)
+        val newWords = NewWords(curWords!!)
 
-
+        nextDrawingPlayer()
+        GlobalScope.launch {
+            drawingPlayer?.socket?.send(Frame.Text(gson.toJson(newWords)))
+            timeAndNotify(DELAY_NEW_ROUND_TO_GAME_RUNNING)
+        }
     }
 
     private fun gameRunning() {
@@ -205,6 +210,21 @@ class Room(
             val phaseChange = PhaseChange(Phase.SHOW_WORD, DELAY_SHOW_WORD_TO_NEW_ROUND)
             broadcast(gson.toJson(phaseChange))
         }
+    }
+
+    private fun nextDrawingPlayer() {
+        drawingPlayer?.isDrawing = false
+
+        if(players.isEmpty()) {
+            return
+        }
+
+        drawingPlayer = if(drawingPlayerIndex <= players.size.minus(1)) {
+            players[drawingPlayerIndex]
+        } else players.last()
+
+        if (drawingPlayerIndex < players.size.minus(1))  drawingPlayerIndex++
+        else drawingPlayerIndex = 0
     }
 
     enum class Phase {
