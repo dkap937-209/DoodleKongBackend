@@ -1,6 +1,7 @@
 package com.dkdev45.data
 
 import com.dkdev45.gson
+import com.dkdev45.server
 import data.models.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
@@ -9,6 +10,7 @@ import util.getRandomWords
 import util.matchesWord
 import util.transformToUnderscores
 import util.words
+import java.util.concurrent.ConcurrentHashMap
 
 class Room(
     val name: String,
@@ -23,6 +25,9 @@ class Room(
     private var curWords: List<String>? = null
     private var drawingPlayerIndex = 0
     private var startTime = 0L
+
+    private val playerRemoveJobs = ConcurrentHashMap<String, Job>()
+    private val leftPlayers = ConcurrentHashMap<String, Pair<Player, Int>>()
 
 
     private var phaseChangeListener:((Phase)-> Unit)? = null
@@ -87,8 +92,38 @@ class Room(
     }
 
     fun removePlayer(clientId: String) {
+        val player = players.find { it.clientId == clientId } ?: return
+        val index = players.indexOf(player)
+        leftPlayers[clientId] = player to index
+        players = players - player
+
+        playerRemoveJobs[clientId] = GlobalScope.launch {
+            delay(PLAYER_REMOVE_TIME)
+            val playerToRemove = leftPlayers[clientId]
+            leftPlayers.remove(clientId)
+            playerToRemove?.let {
+                players = players - it.first
+            }
+            playerRemoveJobs.remove(clientId)
+        }
+
+        val announcement = Announcement(
+            message = "${player.username} left the part :(",
+            timestamp = System.currentTimeMillis(),
+            announcementType = Announcement.TYPE_PLAYER_LEFT
+        )
+
         GlobalScope.launch {
             broadcastPlayerStates()
+            broadcast(gson.toJson(announcement))
+            if(players.size == 1) {
+                phase = Phase.WAITING_FOR_PLAYERS
+                timerJob?.cancel()
+            }
+            else if (players.isEmpty()) {
+                kill()
+                server.rooms.remove(name)
+            }
         }
     }
 
@@ -339,6 +374,12 @@ class Room(
         else drawingPlayerIndex = 0
     }
 
+    private fun kill() {
+        playerRemoveJobs.values.forEach{ it.cancel() }
+        timerJob?.cancel()
+    }
+
+
     enum class Phase {
         WAITING_FOR_PLAYERS,
         WAITING_FOR_START,
@@ -349,6 +390,8 @@ class Room(
 
     companion object{
         const val UPDATE_TIME_FREQUENCY = 1000L
+
+        const val PLAYER_REMOVE_TIME = 60_000L
 
         const val DELAY_WAITING_FOR_START_TO_NEW_ROUND = 10000L
         const val DELAY_NEW_ROUND_TO_GAME_RUNNING = 20000L
