@@ -30,7 +30,7 @@ class Room(
     private val leftPlayers = ConcurrentHashMap<String, Pair<Player, Int>>()
 
     private var curRoundDrawData: List<String> = listOf()
-
+    var lastDrawData: DrawData? = null
 
     private var phaseChangeListener:((Phase)-> Unit)? = null
     @OptIn(InternalCoroutinesApi::class)
@@ -68,6 +68,17 @@ class Room(
 
     fun addSerializedDrawInfo(drawAction: String) {
         curRoundDrawData = curRoundDrawData + drawAction
+    }
+
+    private suspend fun finishOffDrawing() {
+        lastDrawData?.let {
+            if(curRoundDrawData.isNotEmpty() && it.motionEvent == 2) {
+                val finishDrawData = it.copy(
+                    motionEvent = 1
+                )
+                broadcast(gson.toJson(finishDrawData))
+            }
+        }
     }
 
     suspend fun addPlayer(clientId: String, username: String, socketSession: WebSocketSession): Player {
@@ -201,9 +212,15 @@ class Room(
 
             phase = when(phase) {
                 Phase.WAITING_FOR_START -> Phase.NEW_ROUND
-                Phase.GAME_RUNNING -> Phase.SHOW_WORD
+                Phase.GAME_RUNNING -> {
+                    finishOffDrawing()
+                    Phase.SHOW_WORD
+                }
                 Phase.SHOW_WORD -> Phase.NEW_ROUND
-                Phase.NEW_ROUND -> Phase.GAME_RUNNING
+                Phase.NEW_ROUND -> {
+                    word = null
+                    Phase.GAME_RUNNING
+                }
                 else -> Phase.WAITING_FOR_PLAYERS
             }
         }
