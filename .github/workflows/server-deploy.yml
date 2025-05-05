@@ -5,10 +5,14 @@ on:
     branches: [ "master" ]
 
 jobs:
-  ssh-test:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Configure SSH key
+      # Step 1: Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Configure SSH
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh/
@@ -16,10 +20,28 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
-      # Step 2: Test connection
-      - name: Verify SSH access
+      # Step 3: Copy files to server
+      - name: Sync project files
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ./ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/home/${{ secrets.SERVER_USER }}/doodlekong_backend/
+
+      # Step 4: Build and run Docker container
+      - name: Deploy Docker container
         run: |
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} \
-            "echo '🟢 Success! Connected to $(hostname)'; uptime; docker --version || echo '⚠️ Docker not installed'"
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          cd /home/${{ secrets.SERVER_USER }}/doodlekong_backend
+          docker build -t doodlekong-backend .
+          docker stop doodlekong-backend || true
+          docker rm doodlekong-backend || true
+          docker run -d \
+            --name doodlekong-backend \
+            --restart unless-stopped \
+            -p 8080:8080 \
+            -e ENV=production \
+            doodlekong-backend
+          docker system prune -f
+          EOF
