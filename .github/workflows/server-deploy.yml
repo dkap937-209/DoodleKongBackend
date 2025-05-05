@@ -1,0 +1,64 @@
+name: Deploy Doodlekong Backend
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Configure SSH access
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          cat >>~/.ssh/config <<EOF
+          Host doodekong-server
+            HostName ${{ secrets.SERVER_IP }}
+            User ${{ secrets.SERVER_USER }}
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking no
+          EOF
+
+      # Step 3: Sync code to server
+      - name: Rsync project files
+        run: |
+          rsync -avz --delete \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./ doodekong-server:/home/${{ secrets.SERVER_USER }}/doodlekong_backend/
+
+      # Step 4: Build and deploy on server
+      - name: Deploy Doodlekong Backend
+        run: |
+          ssh doodekong-server /bin/bash << 'EOF'
+          cd /home/${{ secrets.SERVER_USER }}/doodlekong_backend
+          
+          # Build Docker image
+          docker build -t doodekong-backend .
+          
+          # Stop and remove old container if exists
+          docker stop doodekong-backend || true
+          docker rm doodekong-backend || true
+          
+          # Run new container with proper port mapping
+          docker run -d \
+            --name doodekong-backend \
+            --restart unless-stopped \
+            -p 8080:8080 \
+            -e ENV_VAR=value \  # Add any environment variables here
+            doodekong-backend
+            
+          # Cleanup unused Docker objects
+          docker system prune -f
+          EOF
+
+      # (Optional) Step 5: Health check
+      - name: Verify deployment
+        run: |
+          ssh doodekong-server "curl -s http://localhost:8080/health || exit 1"
