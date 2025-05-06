@@ -34,23 +34,31 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-          # Ensure buildx is available
-          export DOCKER_CLI_EXPERIMENTAL=enabled
-          docker buildx install
-          
           cd /home/${{ secrets.SERVER_USER }}/doodlekong_backend
-          
-          # Build with proper cleanup
-          docker buildx build \
-            --load \
-            -t doodlekong-backend .
-          
-          # Container management
-          docker stop doodlekong-backend || true
-          docker rm doodlekong-backend || true
-          docker run -d \
-            --name doodlekong-backend \
-            --restart unless-stopped \
-            -p 8080:8080 \
-            doodlekong-backend
+      
+          # 1. Ensure we're using classic builder
+          export DOCKER_BUILDKIT=0
+      
+          # 2. Build with verbose output
+          docker build \
+            --no-cache \
+            -t doodlekong-backend . \
+            | tee build.log || (cat build.log && exit 1)
+      
+          # 3. Only proceed if build succeeded
+          if docker inspect doodlekong-backend &>/dev/null; then
+            # Cleanup old container if exists
+            docker stop doodlekong-backend || true
+            docker rm doodlekong-backend || true
+            
+            # Run new container
+            docker run -d \
+              --name doodlekong-backend \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              doodlekong-backend
+          else
+            echo "❌ Docker build failed - check build.log"
+            exit 1
+          fi
           EOF
