@@ -7,12 +7,13 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # Prevent timeout during long builds
     steps:
       # Step 1: Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Configure SSH
+      # Step 2: Configure SSH with keepalive
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh/
@@ -20,11 +21,11 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
-      # Step 3: Copy files to server
+      # Step 3: Sync project files
       - name: Sync project files
         run: |
           rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ServerAliveInterval=60" \
             ./ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/home/${{ secrets.SERVER_USER }}/doodlekong_backend/
 
       # Step 4: Build and run Docker container
@@ -32,16 +33,32 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
+            -o ServerAliveInterval=60 \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
           cd /home/${{ secrets.SERVER_USER }}/doodlekong_backend
-          docker build -t doodlekong-backend .
+          
+          # Fix for Kotlin compile avoidance
+          echo "kotlin.incremental.useClasspathSnapshot=false" >> gradle.properties
+          echo "org.gradle.caching=false" >> gradle.properties
+          
+          # Build with BuildKit and no cache
+          DOCKER_BUILDKIT=1 docker build \
+            --no-cache \
+            --progress=plain \
+            -t doodlekong-backend .
+            
+          # Clean up old container
           docker stop doodlekong-backend || true
           docker rm doodlekong-backend || true
+          
+          # Run new container
           docker run -d \
             --name doodlekong-backend \
             --restart unless-stopped \
             -p 8080:8080 \
             -e ENV=production \
             doodlekong-backend
+            
+          # Cleanup
           docker system prune -f
           EOF
