@@ -33,28 +33,17 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
-            -o ServerAliveInterval=15 \
-            -o TCPKeepAlive=yes \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          # Ensure buildx is available
+          export DOCKER_CLI_EXPERIMENTAL=enabled
+          docker buildx install
+          
           cd /home/${{ secrets.SERVER_USER }}/doodlekong_backend
           
-          # Disable problematic Gradle/Kotlin features
-          echo "kotlin.incremental.useClasspathSnapshot=false" >> gradle.properties
-          echo "org.gradle.caching=false" >> gradle.properties
-          echo "org.gradle.configureondemand=false" >> gradle.properties
-          
-          # Build with verbose output and no cache
-          DOCKER_BUILDKIT=0 docker build \
-            --no-cache \
-            --progress=plain \
-            -t doodlekong-backend . 2>&1 | tee docker-build.log
-          
-          # Verify image was created
-          if ! docker inspect doodlekong-backend &>/dev/null; then
-            echo "❌ Docker build failed - see docker-build.log"
-            cat docker-build.log
-            exit 1
-          fi
+          # Build with proper cleanup
+          docker buildx build \
+            --load \
+            -t doodlekong-backend .
           
           # Container management
           docker stop doodlekong-backend || true
@@ -64,4 +53,3 @@ jobs:
             --restart unless-stopped \
             -p 8080:8080 \
             doodlekong-backend
-          EOF
