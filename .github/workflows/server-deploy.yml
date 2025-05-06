@@ -33,32 +33,24 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
-            -o ServerAliveInterval=60 \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          # Ensure buildx is available
+          export DOCKER_CLI_EXPERIMENTAL=enabled
+          docker buildx install
+          
           cd /home/${{ secrets.SERVER_USER }}/doodlekong_backend
           
-          # Fix for Kotlin compile avoidance
-          echo "kotlin.incremental.useClasspathSnapshot=false" >> gradle.properties
-          echo "org.gradle.caching=false" >> gradle.properties
-          
-          # Build with BuildKit and no cache
-          DOCKER_BUILDKIT=1 docker build \
-            --no-cache \
-            --progress=plain \
+          # Build with proper cleanup
+          docker buildx build \
+            --load \
             -t doodlekong-backend .
-            
-          # Clean up old container
+          
+          # Container management
           docker stop doodlekong-backend || true
           docker rm doodlekong-backend || true
-          
-          # Run new container
           docker run -d \
             --name doodlekong-backend \
             --restart unless-stopped \
             -p 8080:8080 \
-            -e ENV=production \
             doodlekong-backend
-            
-          # Cleanup
-          docker system prune -f
           EOF
