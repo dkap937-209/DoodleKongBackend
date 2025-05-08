@@ -1,55 +1,42 @@
-name: Deploy Doodlekong Backend
+name: Build and Deploy to Server
 
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - main  # or your deploy branch
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Prevent timeout during long builds
+
     steps:
-      # Step 1: Checkout code
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      # Step 2: Configure SSH with keepalive
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh/
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USER }}
+        password: ${{ secrets.DOCKER_PASS }}
 
-      # Step 3: Sync project files
-      - name: Sync project files
-        run: |
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ServerAliveInterval=60" \
-            ./ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/home/${{ secrets.SERVER_USER }}/doodlekong_backend/
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ secrets.DOCKER_USER }}/doodlekong-backend:latest
 
-      # Step 4: Build and run Docker container
-      - name: Deploy Docker container
-        run: |
-          ssh -i ~/.ssh/deploy_key \
-            -o StrictHostKeyChecking=no \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-          # Ensure buildx is available
-          export DOCKER_CLI_EXPERIMENTAL=enabled
-          docker buildx install
-          
-          cd /home/${{ secrets.SERVER_USER }}/doodlekong_backend
-          
-          # Build with proper cleanup
-          docker buildx build \
-            --load \
-            -t doodlekong-backend .
-          
-          # Container management
+    - name: Deploy on server via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          docker pull ${{ secrets.DOCKER_USER }}/doodlekong-backend:latest
           docker stop doodlekong-backend || true
           docker rm doodlekong-backend || true
-          docker run -d \
+          docker run -d --restart unless-stopped \
             --name doodlekong-backend \
-            --restart unless-stopped \
             -p 8080:8080 \
-            doodlekong-backend
+            ${{ secrets.DOCKER_USER }}/doodlekong-backend:latest
