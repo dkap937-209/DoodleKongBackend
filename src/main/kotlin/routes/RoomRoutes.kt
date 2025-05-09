@@ -1,6 +1,7 @@
 package routes
 
 import com.dkdev45.data.Room
+import com.dkdev45.logger
 import com.dkdev45.server
 import data.models.BasicApiResponse
 import data.models.CreateRoomRequest
@@ -58,8 +59,11 @@ fun Route.createRoomRoute() {
 fun Route.getRoomsRoute() {
     route("/api/getRooms") {
         get {
+            logger.info { "Hello World from getRooms route" }
+            println("Hello World")
             val searchQuery = call.parameters["searchQuery"]
             if(searchQuery == null) {
+                logger.info { "Search Query is empty" }
                 call.respond(HttpStatusCode.BadRequest)
                 return@get
             }
@@ -85,8 +89,10 @@ fun Route.joinRoomRoute(){
         get {
             val username = call.parameters["username"]
             val roomName = call.parameters["roomName"]
+            logger.info { "Request to join room for $username into $roomName" }
 
             if(username == null || roomName == null) {
+                logger.info { "Username of room name is null" }
                 call.respond(HttpStatusCode.BadRequest)
                 return@get
             }
@@ -94,24 +100,28 @@ fun Route.joinRoomRoute(){
             val room = server.rooms[roomName]
             when {
                 room == null -> {
+                    logger.info { "Room name $roomName is invalid" }
                     call.respond(HttpStatusCode.OK, BasicApiResponse(
                         false,
                         "Room not found"
                     ))
                 }
                 room.containsPlayer(username) -> {
+                    logger.info { "A player with name $username already exist in Room $roomName" }
                     call.respond(HttpStatusCode.OK, BasicApiResponse(
                         false,
                         "A player with this username already joined."
                     ))
                 }
                 room.players.size >= room.maxPlayers -> {
+                    logger.info { "Room $roomName is already full" }
                     call.respond(HttpStatusCode.OK, BasicApiResponse(
                         false,
                         "This room is already full."
                     ))
                 }
                 else -> {
+                    logger.info { "Successfully added $username to Room $roomName" }
                     call.respond(HttpStatusCode.OK, BasicApiResponse(true))
                 }
             }

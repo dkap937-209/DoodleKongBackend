@@ -3,6 +3,7 @@ package com.dkdev45
 import DrawingServer
 import com.google.gson.Gson
 import io.ktor.server.application.*
+import mu.KotlinLogging
 
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain.main(args)
@@ -10,6 +11,7 @@ fun main(args: Array<String>) {
 
 val server = DrawingServer()
 val gson = Gson()
+val logger = KotlinLogging.logger {}
 
 fun Application.module() {
     configureSession()
