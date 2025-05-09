@@ -6,7 +6,7 @@
             <maxHistory>7</maxHistory>
         </rollingPolicy>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level %logger - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level %logger - %replace(%msg){'\u001B\[[;\\d]*m', ''}%n</pattern>
             <outputPatternAsHeader>true</outputPatternAsHeader>
             <immediateFlush>true</immediateFlush>
             <withJansi>false</withJansi> <!-- ADD THIS LINE -->
