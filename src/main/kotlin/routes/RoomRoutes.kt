@@ -16,11 +16,14 @@ fun Route.createRoomRoute() {
     route("/api/createRoom") {
         post {
             val roomRequest = kotlin.runCatching { call.receiveNullable<CreateRoomRequest>() }.getOrNull()
+            logger.info { "Request received to create room" }
             if(roomRequest == null) {
+                logger.error { "Room Request is Null" }
                 call.respond(HttpStatusCode.BadRequest, null)
                 return@post
             }
             if(server.rooms[roomRequest.name] != null) {
+                logger.error { "Room name already exist" }
                 call.respond(
                     status = HttpStatusCode.OK,
                     message = BasicApiResponse(false, "Room already exists.")
@@ -28,6 +31,7 @@ fun Route.createRoomRoute() {
                 return@post
             }
             if(roomRequest.maxPlayers < 2) {
+                logger.error { "Room Request max players is below minimum limit of 2" }
                 call.respond(
                     HttpStatusCode.OK,
                     BasicApiResponse(false, "The minimum room size is 2.")
@@ -35,6 +39,7 @@ fun Route.createRoomRoute() {
                 return@post
             }
             if(roomRequest.maxPlayers > MAX_ROOM_SIZE) {
+                logger.error { "Room Request max players is above minimum limit of $MAX_ROOM_SIZE" }
                 call.respond(
                     status = HttpStatusCode.OK,
                     message = BasicApiResponse(false, "The maximum room size is $MAX_ROOM_SIZE")
@@ -46,7 +51,7 @@ fun Route.createRoomRoute() {
                 roomRequest.maxPlayers
             )
             server.rooms[roomRequest.name] = room
-            println("Room created: ${roomRequest.name}")
+            logger.info { "Successfully created room with name: ${roomRequest.name} and max players: ${roomRequest.maxPlayers}" }
 
             call.respond(
                 HttpStatusCode.OK,
@@ -59,9 +64,8 @@ fun Route.createRoomRoute() {
 fun Route.getRoomsRoute() {
     route("/api/getRooms") {
         get {
-            logger.info { "Hello World from getRooms route" }
-            println("Hello World")
             val searchQuery = call.parameters["searchQuery"]
+            logger.info { "Request received to search for room with name: $searchQuery" }
             if(searchQuery == null) {
                 logger.info { "Search Query is empty" }
                 call.respond(HttpStatusCode.BadRequest)
@@ -78,6 +82,7 @@ fun Route.getRoomsRoute() {
                     playerCount = it.players.size
                 )
             }.sortedBy { it.name }
+            logger.info { "Rooms found matching searchQuery: $roomsResult" }
 
             call.respond(HttpStatusCode.OK, roomResponses)
         }

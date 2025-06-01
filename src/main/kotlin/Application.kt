@@ -2,6 +2,7 @@ package com.dkdev45
 
 import DrawingServer
 import com.google.gson.Gson
+import configureLogging
 import io.ktor.server.application.*
 import mu.KotlinLogging
 
@@ -16,7 +17,7 @@ val logger = KotlinLogging.logger {}
 fun Application.module() {
     configureSession()
     configureSerialization()
-    configureMonitoring()
     configureSockets()
     configureRouting()
+    configureLogging()
 }

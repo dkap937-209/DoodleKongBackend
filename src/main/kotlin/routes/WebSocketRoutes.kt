@@ -3,6 +3,7 @@ package routes
 import com.dkdev45.data.Player
 import com.dkdev45.data.Room
 import com.dkdev45.gson
+import com.dkdev45.logger
 import com.dkdev45.server
 import com.dkdev45.session.DrawingSession
 import com.google.gson.JsonParser
@@ -29,8 +30,10 @@ fun Route.gameWebSocketRoute() {
         standardWebSocket { socket, clientId, message, payload ->
             when(payload) {
                 is JoinRoomHandshake -> {
+                    logger.info { "JoinRoomHandshake received. RoomName: ${payload.roomName}, username: ${payload.username}" }
                     val room = server.rooms[payload.roomName]
                     if(room == null) {
+                        logger.error { "JoinRoomHandshake: No room found for ${payload.roomName}" }
                         val gameError = GameError(
                             GameError.ERROR_ROOM_NOT_FOUND
                         )
@@ -46,7 +49,9 @@ fun Route.gameWebSocketRoute() {
                     server.playerJoined(player)
                     if(!room.containsPlayer(player.username)) {
                         room.addPlayer(player.clientId, player.username, socket)
+                        logger.info { "Added player ${player.username} to $room" }
                     } else {
+                        logger.info { "A player with name ${player.username} already exist. Pinging them." }
                         val playerInRoom = room.players.find { it.clientId == clientId }
                         playerInRoom?.socket = socket
                         playerInRoom?.startPinging()
@@ -79,6 +84,7 @@ fun Route.gameWebSocketRoute() {
                     server.players[clientId]?.receivePong()
                 }
                 is DisconnectRequest -> {
+                    logger.info { "Player with clientId $clientId has left the room" }
                     server.playerLeft(clientId, true)
                 }
             }
